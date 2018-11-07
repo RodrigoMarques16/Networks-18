@@ -1,0 +1,6 @@
+# Ignore everything
+*
+
+# Except .java and repository settings
+!*.java
+!.gitignore
