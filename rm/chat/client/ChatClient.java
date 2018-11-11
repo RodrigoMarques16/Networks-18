@@ -86,6 +86,7 @@ public class ChatClient {
     // Instancia o ChatClient e arranca-o invocando o seu método run()
     // * NÃO MODIFICAR *
     public static void main(String[] args) throws IOException {
+        
         ChatClient client = new ChatClient(args[0], Integer.parseInt(args[1]));
         client.run();
     }

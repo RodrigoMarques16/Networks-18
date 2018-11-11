@@ -8,6 +8,7 @@ import java.nio.charset.*;
 import java.util.*;
 
 import rm.chat.server.*;
+import rm.chat.shared.*;
 
 public class ChatServer {
     // A pre-allocated buffer for the received data
@@ -17,11 +18,9 @@ public class ChatServer {
     final private static Charset charset = Charset.forName("UTF8");
     final private static CharsetDecoder decoder = charset.newDecoder();
 
-    // A selector for each room
-    private static Vector<Selector> rooms = new Vector<Selector>();
     private static Selector selector;
     private static ServerSocketChannel ssc;
-    private static ServerSocket ss;
+    //private static ServerSocket ss;
 
     /**
      * Process a message sent by a client
@@ -42,20 +41,22 @@ public class ChatServer {
             return false;
         }
 
-        // Decode and print the message to stdout
+        // Decode message
         String message = decoder.decode(buffer).toString().trim();
 
-        if (message.charAt(0) == '/')
-            processCommand(sc, message);
+        // If the message is a command process it.
+        if (message.charAt(0) == '/' && message.charAt(1) != '/')
+            return processCommand(sc, message);
+        
+        if(true) { // TODO: users outside a room can't send messages
 
-        // Check if the user
-        SelectionKey key = sc.keyFor(selector);
-        if (key.attachment() == null) {
-            key.attach(message);
-        } else {
+            // Remove escaped '/'
+            if(message.charAt(0) == '/' && message.charAt(1) == '/')
+                message = message.substring(1);
+
+            // TODO: broadcast message only to client's room
             broadcast(message);
         }
-
         return true;
     }
 
@@ -66,15 +67,24 @@ public class ChatServer {
      * @param message
      * @throws IOException
      */
-    private static void processCommand(SocketChannel sc, String message) throws IOException {
+    private static boolean processCommand(SocketChannel sc, String message) throws IOException {
+        /* 
+        SelectionKey key = sc.keyFor(selector);
+        if (key.attachment() == null) {
+            key.attach(message);
+        } else {
+            broadcast(message);
+        }
+        */
         String args[] = message.split("");
-        if (args[0] == "nick") {
+
+        if (args[0].compareTo("nick") == 0) {
             setNickname(sc, args[1]);
-        } else if (args[0] == "join") {
-            addUser(sc, args[1]);
-        } else if (args[0] == "leave") {
-            removeUser(sc);
-        } else if (args[0] == "bye") {
+        } else if (args[0].compareTo("join") == 0) {
+            joinRoom(sc, args[1]);
+        } else if (args[0].compareTo("leave") == 0) {
+            leaveRoom(sc);
+        } else if (args[0].compareTo("bye") == 0) {
             disconnect(sc);
         }
     }
@@ -112,14 +122,15 @@ public class ChatServer {
         // Create a ServerSocketChannel
         ssc = ServerSocketChannel.open();
 
-        // Set it to non-blocking, so we can use select
+        // Set it to non-blocking
         ssc.configureBlocking(false);
 
         // Get the Socket connected to this channel, and bind it to the
-        // listening port
-        ss = ssc.socket();
+        // listening port   
+        //ss = ssc.socket();
         InetSocketAddress isa = new InetSocketAddress(port);
-        ss.bind(isa);
+        //ss.bind(isa);
+        ssc.bind(isa);
 
         // Create a new Selector for selecting
         selector = Selector.open();
@@ -131,23 +142,28 @@ public class ChatServer {
     }
 
     /**
-     * Accept an incoming connection from a client.
+     * Accept an incoming connection from a client. Configures it so it's
+     * non-blocking and registers it with the selector.
      * 
      * @throws IOException
      * @throws ClosedChannelException
      */
-    private static void acceptConnection() throws IOException, ClosedChannelException {
+    private static void acceptConnection(SelectionKey key) throws IOException {
         // It's an incoming connection. Register this socket with
-        // the Selector so we can listen for input on it
-        Socket s = ss.accept();
-        System.out.println("Got connection from " + s);
-
+        // the Selector so we can listen for input on it.
+        //Socket s = ss.accept();
+        //System.out.println("Got connection from " + s);
+        
         // Make sure to make it non-blocking, so we can use a selector
         // on it.
-        SocketChannel sc = s.getChannel();
+        //SocketChannel sc = s.getChannel();
+        SocketChanel sc = ssc.accept();
         sc.configureBlocking(false);
+        System.out.println("Got connection from " + sc);
 
-        // Register it with the selector, for reading
+        // TODO: CREATE NEW REMOTECLIENT
+
+        // Register it with the selector, for reading,
         sc.register(selector, SelectionKey.OP_READ);
     }
 
@@ -157,36 +173,32 @@ public class ChatServer {
      * @param key of the SocketChannel
      */
     private static void readSocket(SelectionKey key) {
-        SocketChannel sc = null;
+        SocketChannel sc = (SocketChannel) key.channel();
 
         try {
-
-            // It's incoming data on a connection -- process it
-            sc = (SocketChannel) key.channel();
+            // It's incoming data on a connection -- process it 
             boolean ok = processInput(sc);
 
             // If the connection is dead, remove it from the selector
             // and close it
             if (!ok) {
                 key.cancel();
-                closeSocket(sc.socket());
+                close(sc);
             }
-
         } catch (IOException ie) {
             // On exception, remove this channel from the selector
             key.cancel();
-            closeChannel(sc);
+            close(sc);
         }
     }
 
     /**
-     * Closes given socket.
+     * Closes a given socket.
      * 
      * @param s socket to close
      */
     private static void closeSocket(Socket s) {
-        try {
-            s = sc.socket();
+        try {   
             System.out.println("Closing connection to " + s);
             s.close();
         } catch (IOException ie) {
@@ -195,22 +207,23 @@ public class ChatServer {
     }
 
     /** 
-     * Closes given channel
+     * Closes a given channel
      * 
      * @param sc channel to close
      */
-    private static void closeChannel(SocketChannel sc) {
+    private static void close(SocketChannel sc) {
         try {
             sc.close();
-            System.out.println("Closed " + sc);
-        } catch (IOException ie2) {
-            System.out.println(ie2);
+            sc.socket().close(); // necessary?
+            System.out.println("Closing connection to " + sc);
+        } catch (IOException ie) {
+            System.err.println("Error closing " + sc + ": " + ie);
         }
     }
 
     public static void main(String args[]) throws Exception {
-        int port = Integer.parseInt(args[0]);
-
+        //int port = Integer.parseInt(args[0]);
+        int port = 6699;
         try {
             setup(port);
 
@@ -227,11 +240,9 @@ public class ChatServer {
 
                 // Get the keys corresponding to the activity that has been
                 // detected, and process them one by one
-                Set<SelectionKey> keys = selector.selectedKeys();
-
-                for (SelectionKey key : keys) {
+                for (SelectionKey key : selector.selectedKeys()) {
                     if (key.isAcceptable()) {
-                        acceptConnection();
+                        acceptConnection(key);
                     } else if (key.isReadable()) {
                         readSocket(key);
                     }
