@@ -7,18 +7,7 @@ import java.nio.channels.*;
 import java.nio.charset.*;
 import java.util.*;
 
-public enum State {
-    INIT, INSIDE, OUTSIDE;
-}
-
-private class Chatroom {
-
-  private int id;
-  private List<Client> users = new ArrayList<Client>();
-  
-
-}
-
+import rm.chat.server.*;
 
 public class ChatServer {
   // A pre-allocated buffer for the received data
