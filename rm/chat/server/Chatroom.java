@@ -1,9 +1,12 @@
 package rm.chat.server;
 
+import java.util.ArrayList;
+import java.util.List;
+
 import rm.chat.server.RemoteClient;
 
 /**
- * A room where users can see and chat with eachother. Keeps a record of all the
+ * A room where users can see and chat with each other. Keeps a record of all the
  * users in the room
  */
 public class Chatroom {
@@ -12,7 +15,7 @@ public class Chatroom {
 
     private int id;
     private String name;
-    private List<Client> users;
+    private List<RemoteClient> users;
 
     /**
      * Create a new empty chatroom.
@@ -20,7 +23,7 @@ public class Chatroom {
     public Chatroom() {
         this.id = getNewId();
         this.name = "Room " + this.id;
-        this.users = new ArrayList<Client>();
+        this.users = new ArrayList<RemoteClient>();
     }
 
     /**
@@ -31,7 +34,7 @@ public class Chatroom {
     public Chatroom(String name) {
         this.id = getNewId();
         this.name = name;
-        this.users = new ArrayList<Client>();
+        this.users = new ArrayList<RemoteClient>();
     }
 
     /**
@@ -46,19 +49,19 @@ public class Chatroom {
     /**
      * Add a user to this room.
      * 
-     * @param id of the user
+     * @param user
      */
-    public void addUser(int id) {
-
+    public void addUser(RemoteClient user) {
+    	users.add(user);
     }
 
     /**
      * Remove a user to this room.
      * 
-     * @param id of the user
+     * @param user
      */
-    public void removeUser(int id) {
-
+    public void removeUser(RemoteClient user) {
+    	users.remove(user);
     }
 
 }

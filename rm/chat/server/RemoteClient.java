@@ -41,7 +41,9 @@ public class RemoteClient {
      */
     public RemoteClient() {
         this.id = getNewId();
-        this.state = INIT;
+        this.state = State.INIT;
+        this.nick = "";
+        this.room = -1;
     }
 
     /**
@@ -54,14 +56,14 @@ public class RemoteClient {
     public RemoteClient(String nick) {
         this.id = ++ID;
         this.nick = nick;
-        this.state = OUTSIDE;
+        this.state = State.OUTSIDE;
     }
 
-    public int getState() {
+    public State getState() {
         return this.state;
     }
 
-    setState(State state) {
+    void setState(State state) {
         this.state = state;
     }
 
@@ -69,7 +71,7 @@ public class RemoteClient {
         return this.room;
     }
 
-    setRoom(int room) {
+    void setRoom(int room) {
         this.room = room;
     }
 
@@ -77,7 +79,7 @@ public class RemoteClient {
         return this.nick;
     }
 
-    setNick(String nick) {
+    void setNick(String nick) {
         this.nick = nick;
     }
 
@@ -87,6 +89,10 @@ public class RemoteClient {
 
     private int getNewId() {
         return ++ID;
+    }
+    
+    public boolean canChat() {
+    	return this.getState() == State.INIT;
     }
 
 }
