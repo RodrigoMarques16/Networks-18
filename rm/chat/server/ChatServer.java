@@ -13,7 +13,6 @@ import rm.chat.shared.*;
 
 public class ChatServer {
 	
-	
 	// A pre-allocated buffer for the received data
 	final private static ByteBuffer buffer = ByteBuffer.allocate(16384);
 
@@ -29,6 +28,17 @@ public class ChatServer {
 	
 	
 	// private static ServerSocket ss;
+
+	/**
+	 * Wrapper for ClientManager's getClient
+	 * 
+	 * @param sc - SocketChannel
+	 * @return the client
+	 */
+	private static RemoteClient getClient(SocketChannel sc) {
+		int id = (Integer) sc.keyFor(selector).attachment();
+		return clients.getClientById(id);
+	}
 
 	/**
 	 * Process a message sent by a client
@@ -48,7 +58,8 @@ public class ChatServer {
 			return false;
 		}
 
-		String message = decoder.decode(buffer).toString().trim();
+		String str = decoder.decode(buffer).toString().trim();
+		Message message = new Message(str);
 
 		if (isCommand(message))
 			return processCommand(sc, message);
@@ -61,21 +72,6 @@ public class ChatServer {
 		
 		return true;
 	}
-	
-	private static RemoteClient getClient(SocketChannel sc) {
-		int id = (Integer) sc.keyFor(selector).attachment();
-		return clients.getClientById(id);
-	}
-	
-	private static boolean isCommand(String message) {
-		return (message.charAt(0) == '/' && message.length() > 1 && message.charAt(1) != '/');
-	}
-	
-	private static String cleanMessage(String message) {
-		if (message.charAt(0) == '/' && message.length() > 1 && message.charAt(1) == '/')
-			message = message.substring(1);
-		return message;
-	}
 
 	/**
 	 * Process a user command
@@ -84,7 +80,7 @@ public class ChatServer {
 	 * @param message
 	 * @throws IOException
 	 */
-	private static boolean processCommand(SocketChannel sc, String message) throws IOException {
+	private static boolean processCommand(SocketChannel sc, Message message) throws IOException {
 		String args[] = message.split(" ");
 
 		log(sc, "COMMAND: " + args[0]);
@@ -166,7 +162,7 @@ public class ChatServer {
 	 * @param message to broadcast
 	 * @throws IOException
 	 */
-	private static void broadcast(String message) throws IOException {
+	private static void broadcast(Message message) throws IOException {
 		for (SelectionKey key : selector.keys()) {
 			if (key.isValid() && key.channel() instanceof SocketChannel) {
 				Integer username = (Integer) key.attachment();

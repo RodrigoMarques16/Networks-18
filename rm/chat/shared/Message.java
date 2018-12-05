@@ -72,8 +72,30 @@ public class Message {
 	public static Message errorMessage() {
 		return new Message(MessageType.ERROR);
 	}
+
 	public boolean isError() {
 		return this.type == MessageType.ERROR;
 	}
+
+	/**
+	 * Test if a message is a command
+	 * @param message
+	 * @return
+	 */
+	public static boolean isCommand(String message) {
+		return (message.charAt(0) == '/' && message.length() > 1 && message.charAt(1) != '/');
+	}
 	
+	/**
+	 * Clean up a message by removing escape characters
+	 * @param message
+	 * @return
+	 */
+	public static String cleanMessage(String message) {
+		if (message.charAt(0) == '/' && message.length() > 1 && message.charAt(1) == '/')
+			message = message.substring(1);
+		message.trim();
+		return message;
+	}
+
 }
