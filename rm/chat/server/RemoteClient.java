@@ -77,6 +77,8 @@ public class RemoteClient {
 
     void setNick(String nick) {
         this.nick = nick;
+        if (this.state == State.INIT)
+            this.state = State.OUTSIDE;
     }
 
     public int getId() {
@@ -103,7 +105,7 @@ public class RemoteClient {
      * @return True if the client can chat
      */
     public boolean canChat() {
-    	return this.getState() == State.INIT;
+    	return this.getState() == State.INSIDE;
     }
 
     /**
@@ -142,6 +144,14 @@ public class RemoteClient {
     }
 
     /**
+     * Send an ERROR message to the client
+     * @throws IOException
+     */
+    public boolean sendBYE() throws IOException {
+        return this.sendMessage(new Message(MessageType.BYE));
+    }
+
+    /**
      * Send a message to the client
      * 
      * @param message - to send
@@ -153,23 +163,32 @@ public class RemoteClient {
             SocketChannel sc = (SocketChannel) key.channel();
             
             String msg = "";
-            if (message.getType() == MessageType.MESSAGE) {
-                msg = String.format("MESSAGE %s %s\n", message.getUser(), message.getMessage());
-            } else if (message.getType() == MessageType.OK) {
-                msg = "OK\n";
-            } else if (message.getType() == MessageType.ERROR) {
-                msg = "ERROR\n";
-            } else if (message.getType() == MessageType.BYE) {
-                msg = "BYE\n";
-            } else if (message.getType() == MessageType.JOINED) {
-                msg = String.format("JOINED %s\n", message.getMessage());
-            } else if (message.getType() == MessageType.LEFT) {
-                msg = String.format("LEFT %s\n", message.getMessage());
-            } else if (message.getType() == MessageType.NEWNICK) {
-                msg = String.format("NEWNICK %s\n", message.getMessage());
-            } else {
-                System.out.println("UNHANDLED MESSAGE TYPE");
-                return false;
+            switch(message.getType()) {
+                case MESSAGE:
+                case PRIV:
+                    msg = String.format("MESSAGE %s %s", message.getUser(), message.getMessage());
+                    break;
+                case BYE:
+                    msg = "BYE";
+                    break;
+                case ERROR:
+                    msg = "ERROR";
+                    break;
+                case OK:
+                	msg = "OK";
+                	break;
+                case JOINED:
+                    msg = String.format("JOINED %s", message.getMessage());
+                    break;
+                case LEFT:
+                    msg = String.format("LEFT %s", message.getMessage());
+                    break;
+                case NEWNICK: 
+                    msg = String.format("NEWNICK %s %s", message.getMessage(), message.getUser());
+                    break;
+                default:
+                    System.out.println("UNHANDLED MESSAGE TYPE");
+                    return false;
             }
 
             if (msg != "") {
@@ -185,10 +204,12 @@ public class RemoteClient {
 
     public void joinRoom(String room) {
         this.room = room;
+        this.state = State.INSIDE;
     }
 
     public void leaveRoom() {
         this.room = null;
+        this.state = State.OUTSIDE;
     }
 
 }

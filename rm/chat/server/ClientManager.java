@@ -4,14 +4,17 @@ import java.util.ArrayList;
 import java.util.Hashtable;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import rm.chat.server.RemoteClient;
 
 /**
- * CKeep track of existing clients.
+ * Keep track of existing clients.
  * Does username checks
  */
 public class ClientManager {
+	
+	// should have mapped clients to name instead of id
 	private Map<Integer, RemoteClient> clients;
 	private List<String> namesInUse;
 	
@@ -27,6 +30,20 @@ public class ClientManager {
 	 */
 	public RemoteClient getClientById(Integer id) {
 		return clients.get(id);
+	}
+	
+	/**
+	 * Retrieve a RemoteClient by its Id
+	 * @param id
+	 * @return - the client
+	 */
+	public RemoteClient getClientByName(String name) {
+		Set<Integer> keys = clients.keySet();
+		for(Integer id : keys) {
+			if (clients.get(id).getNick().equals(name))
+				return clients.get(id);
+		}
+		return null;
 	}
 	
 	/**

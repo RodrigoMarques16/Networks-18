@@ -7,10 +7,10 @@ import java.nio.channels.*;
 import java.nio.charset.*;
 import java.util.*;
 
-import rm.chat.server.*;
 import rm.chat.server.RemoteClient.State;
 import rm.chat.shared.*;
 import rm.chat.shared.Message.MessageType;
+import sun.net.www.content.text.plain;
 
 public class ChatServer {
 	
@@ -58,12 +58,10 @@ public class ChatServer {
 			return false;
 		}
 		
-		String input = decoder.decode(buffer).toString().trim();
-		System.out.println("Received " + input);
+		String input = decoder.decode(buffer).toString();
 		String[] messages = input.split("\n");
 		
 		RemoteClient client = getClient(sc);
-		String name = client.getNick();
 		
 		for(String str : messages) {
 			log(client, str);
@@ -71,15 +69,14 @@ public class ChatServer {
 			if (str.length() == 0)
 				continue;
 
-			Message message = new Message(name, str);
-			
+			Message message = new Message(client.getNick(), str.trim());
 			if (message.isCommand()) {
 				boolean result = processCommand(client, message);
 				client.reportResult(result);
 			}
 			else if (client.canChat()) {
 				message.clean();
-				broadcast(message);
+				rooms.getRoom(client.getRoom()).broadcast(message);
 			}
 		}
 		return true;
@@ -98,17 +95,57 @@ public class ChatServer {
 
 		log(client, "COMMAND: " + args[0]);
 		
-		if (args[0].compareTo("/nick") == 0) {
+		switch (args[0]) {
+		case "/nick":
 			return setNickname(client, args[1]);
-		} else if (args[0].compareTo("/join") == 0) {
+		case "/join":
 			return joinRoom(client, args[1]);
-		} else if (args[0].compareTo("/leave") == 0) {
+		case "/leave":
 			return leaveRoom(client);
-		} else if (args[0].compareTo("/bye") == 0) {
+		case "/bye":
 			return disconnect(client);
-		} else {
+		case "/priv":
+			return privateMessage(client, args[1], args);
+		default:
 			return false;
 		}
+	}
+	
+	private static boolean privateMessage(RemoteClient client, String to, String[] msg) {
+		
+		if (client.getState() == State.INIT || client.getNick().equals(to))
+			return false;
+		
+		StringBuilder str = new StringBuilder();
+		for(int i = 2; i < msg.length; i++) {
+			str.append(msg[i] + " ");
+		}
+
+		log(client, String.format("to %s: %s", to, str));
+		
+		try {
+			RemoteClient other = clients.getClientByName(to);
+			
+			if (other == null)
+				return false;
+
+			other.sendMessage(new Message(
+				MessageType.PRIV, 
+				String.format("From %s:", client.getNick()), 
+				str.toString()
+			));
+			
+			client.sendMessage(new Message(
+				MessageType.PRIV, 
+				String.format("To %s:", to), 
+				str.toString()
+			));
+			
+			return true;
+		} catch (IOException e) {
+			e.printStackTrace();
+		}
+		return false;
 	}
 	
 	/**
@@ -130,7 +167,8 @@ public class ChatServer {
 					Chatroom room = rooms.getRoom(client.getRoom());
 					room.broadcast(new Message(
 						MessageType.NEWNICK,
-						String.format("%s %s", oldNick, client.getNick())
+						client.getNick(),
+						oldNick
 					));
 				}
 			} catch(IOException e) {
@@ -149,7 +187,7 @@ public class ChatServer {
 	private static boolean joinRoom(RemoteClient client, String room) {
 		log(client, "Join " + room);
 
-		if (client.getNick().compareTo("") == 0)
+		if (client.getState() == State.INIT)
 			return false;
 		
 		String oldRoom = client.getRoom();
@@ -173,6 +211,7 @@ public class ChatServer {
 	 */
 	private static boolean leaveRoom(RemoteClient client) {
 		log(client, "Left " + client.getRoom());
+		
 		try {
 			if (client.getRoom() != null){
 				rooms.leaveRoom(client);
@@ -191,33 +230,16 @@ public class ChatServer {
 	 * @param sc user's socket
 	 */
 	private static boolean disconnect(RemoteClient client) {
+		log(client, " Disconnect");
 		leaveRoom(client);
+		try {
+			client.sendBYE();
+		} catch (IOException e) {
+			e.printStackTrace();
+		}
 		SocketChannel sc = (SocketChannel) client.getKey().channel();
 		close(sc);
 		return true;
-	}
-		
-	/**
-	 * Broadcast a message to all connected clients
-	 * 
-	 * @param message to broadcast
-	 * @throws IOException
-	 */
-	private static void broadcast(Message message) throws IOException {
-		for (SelectionKey key : selector.keys()) {
-			if (key.isValid() && key.channel() instanceof SocketChannel) {
-				Integer username = (Integer) key.attachment();
-				//String msg = message.addUsername();
-				//message = String.format("%s: %s\n", username, message);
-				//ByteBuffer msgBuffer = ByteBuffer.wrap(message.getBytes());
-				SocketChannel sc = (SocketChannel) key.channel();
-				// sc.write(msgBuffer);
-				// while(msgBuffer.hasRemaining()) {
-				//     sc.write(msgBuffer);
-				//}
-				// msgBuffer.rewind();
-			}
-		}
 	}
 		
 	/**
@@ -313,6 +335,7 @@ public class ChatServer {
 	 * 
 	 * @param s socket to close
 	 */
+	/*
 	private static void closeSocket(Socket s) {
 		try {
 			System.out.println("Closing connection to " + s);
@@ -320,7 +343,7 @@ public class ChatServer {
 		} catch (IOException ie) {
 			System.err.println("Error closing socket " + s + ": " + ie);
 		}
-	}
+	}*/
 
 	/**
 	 * Closes a given channel

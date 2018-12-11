@@ -4,10 +4,6 @@ import java.io.IOException;
 import java.util.Hashtable;
 import java.util.Map;
 
-import com.sun.xml.internal.ws.policy.privateutil.PolicyUtils.IO;
-
-import rm.chat.shared.Message;
-
 public class ChatManager {
 	private Map<String, Chatroom> rooms;
 	
@@ -47,5 +43,4 @@ public class ChatManager {
 		}
 	}
 
-	
 }

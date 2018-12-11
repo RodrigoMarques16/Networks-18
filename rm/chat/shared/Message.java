@@ -37,7 +37,11 @@ public class Message {
 		/**
 		 * Confirm a user's exit command.
 		 */
-		BYE
+		BYE,
+		/**
+		 * Private message
+		 */
+		PRIV
 	}
 	
 	private MessageType type;
@@ -56,9 +60,21 @@ public class Message {
 		this.message = message;
 	}
 	
-	public Message(String username, String message) {
+	public Message(MessageType type, String username, String message) {
+		this.type = type;
+		this.username = username;
+		this.message = message;
+	}
+
+	public Message(String message) {
 		this.type = MessageType.MESSAGE;
 		this.username = "";
+		this.message = message;
+	}
+	
+	public Message(String username, String message) {
+		this.type = MessageType.MESSAGE;
+		this.username = username;
 		this.message = message;
 	}
 
@@ -132,6 +148,28 @@ public class Message {
 
 	public String[] getArgs() {
 		return this.message.split(" ");
+	}
+
+	public static String parse(String message) {
+		String[] args = message.split(" ");
+		switch(args[0]) {
+			case "OK":
+				return null;
+			case "ERROR":
+				return null;
+			case "BYE": 
+				return null;
+			case "NEWNICK":
+				return String.format("%s changed username to %s\n", args[1], args[2]);
+			case "JOINED":
+				return String.format("%s joined the room\n", args[1]);
+			case "LEFT":
+				return String.format("%s left the room\n", args[1]);
+			default: {
+				String msg = message.substring(args[0].length() + args[1].length() + 2);
+				return String.format("%s: %s\n", args[1], msg);
+			}
+		}
 	}
 
 }

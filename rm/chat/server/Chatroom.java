@@ -2,10 +2,7 @@ package rm.chat.server;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.nio.channels.SocketChannel;
-import java.nio.channels.SelectionKey;
 import java.io.IOException;
-import java.nio.ByteBuffer;
 
 import rm.chat.shared.Message;
 import rm.chat.shared.Message.MessageType;
