@@ -2,13 +2,12 @@ package rm.chat.client;
 
 import java.io.*;
 import java.net.*;
+import java.nio.ByteBuffer;
 import java.nio.channels.SocketChannel;
-import java.util.*;
 import java.awt.*;
 import java.awt.event.*;
 import javax.swing.*;
 
-import rm.chat.shared.*;
 import rm.chat.client.ChatListener;
 
 public class ChatClient {
@@ -90,8 +89,9 @@ public class ChatClient {
         }
         
         // Start listening for server messages
-        //this.listener = new ChatListener();
-        //listener.start();
+        this.listener = new ChatListener(channel, this);
+        Thread thread = new Thread(listener);
+        thread.start();
 
         System.out.println("Connected to " + server + ":" + port);
     }
@@ -101,6 +101,16 @@ public class ChatClient {
     // na caixa de entrada
     public void newMessage(String message) throws IOException {
         // PREENCHER AQUI com código que envia a mensagem ao servidor
+    	ByteBuffer buffer = ByteBuffer.wrap(message.getBytes());
+    	try {
+    		channel.write(buffer);
+            while(buffer.hasRemaining()) {
+                channel.write(buffer);
+            }
+    	} catch(IOException e) {
+    		System.out.println(e);
+    	}
+    	
     }
     
     // Método principal do objecto
