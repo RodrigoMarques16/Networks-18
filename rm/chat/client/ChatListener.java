@@ -1,4 +1,3 @@
-
 package rm.chat.client;
 
 import java.io.IOException;
