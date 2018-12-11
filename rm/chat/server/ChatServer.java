@@ -10,7 +10,6 @@ import java.util.*;
 import rm.chat.server.RemoteClient.State;
 import rm.chat.shared.*;
 import rm.chat.shared.Message.MessageType;
-import sun.net.www.content.text.plain;
 
 public class ChatServer {
 	
