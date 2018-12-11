@@ -10,6 +10,7 @@ import java.util.*;
 import rm.chat.server.*;
 import rm.chat.server.RemoteClient.State;
 import rm.chat.shared.*;
+import rm.chat.shared.Message.MessageType;
 
 public class ChatServer {
 	
@@ -25,7 +26,6 @@ public class ChatServer {
 
 	private static ClientManager clients = new ClientManager();
 	private static ChatManager rooms = new ChatManager();
-	
 	
 	// private static ServerSocket ss;
 
@@ -57,52 +57,58 @@ public class ChatServer {
 		if (buffer.limit() == 0) {
 			return false;
 		}
-
-		String str = decoder.decode(buffer).toString().trim();
-		Message message = new Message(str);
-
-		if (isCommand(message))
-			return processCommand(sc, message);
+		
+		String input = decoder.decode(buffer).toString().trim();
+		System.out.println("Received " + input);
+		String[] messages = input.split("\n");
 		
 		RemoteClient client = getClient(sc);
-		if (client.canChat()) {
-			cleanMessage(message);
-			broadcast(message);
-		}
+		String name = client.getNick();
 		
+		for(String str : messages) {
+			log(client, str);
+
+			if (str.length() == 0)
+				continue;
+
+			Message message = new Message(name, str);
+			
+			if (message.isCommand()) {
+				boolean result = processCommand(client, message);
+				client.reportResult(result);
+			}
+			else if (client.canChat()) {
+				message.clean();
+				broadcast(message);
+			}
+		}
 		return true;
 	}
 
 	/**
-	 * Process a user command
+
+	* Process a user command
 	 * 
 	 * @param sc
 	 * @param message
 	 * @throws IOException
 	 */
-	private static boolean processCommand(SocketChannel sc, Message message) throws IOException {
-		String args[] = message.split(" ");
+	private static boolean processCommand(RemoteClient client, Message message) throws IOException {
+		String args[] = message.getArgs();
 
-		log(sc, "COMMAND: " + args[0]);
+		log(client, "COMMAND: " + args[0]);
 		
 		if (args[0].compareTo("/nick") == 0) {
-			setNickname(sc, args[1]);
+			return setNickname(client, args[1]);
 		} else if (args[0].compareTo("/join") == 0) {
-			joinRoom(sc, args[1]);
+			return joinRoom(client, args[1]);
 		} else if (args[0].compareTo("/leave") == 0) {
-			leaveRoom(sc);
+			return leaveRoom(client);
 		} else if (args[0].compareTo("/bye") == 0) {
-			disconnect(sc);
+			return disconnect(client);
 		} else {
-			sendMessage(sc, Message.errorMessage());
+			return false;
 		}
-		
-		return true;
-	}
-
-	private static void log(SocketChannel sc, String message) {
-		int id = (int) sc.keyFor(selector).attachment();
-		System.out.println("Client " + id + ": " + message);
 	}
 	
 	/**
@@ -111,39 +117,72 @@ public class ChatServer {
 	 * @param sc   user's socket
 	 * @param name to give the user
 	 */
-	private static boolean setNickname(SocketChannel sc, String name) {
-		SelectionKey key = sc.keyFor(selector);
-		int id = (int) key.attachment();
-		boolean result = clients.setUsername(id, name);
-		log(sc, "Name set to '" + clients.getUsername(id) + "'");
+	private static boolean setNickname(RemoteClient client, String name) {
+		String oldNick = client.getNick();
+		boolean result = clients.setUsername(client, name);
+
+		if (result){
+			log(client, "Name set to '" + client.getNick() + "'");
+
+			try { 
+				String roomName = client.getRoom();
+				if (roomName != null) {
+					Chatroom room = rooms.getRoom(client.getRoom());
+					room.broadcast(new Message(
+						MessageType.NEWNICK,
+						String.format("%s %s", oldNick, client.getNick())
+					));
+				}
+			} catch(IOException e) {
+				System.out.println(e.toString());
+			}
+		}
 		return result;
 	}
-
-	private static boolean sendMessage(SocketChannel sc, Message message) {
-		// TODO:
-		return true;
-	}
-	
-	/**
-	 * Change the room a user is in.
-	 * 
-	 * @param sc   user's socket
-	 * @param room to put the user in
-	 */
-	private static boolean joinRoom(SocketChannel sc, String room) {
-		int roomId = Integer.parseInt(room);
 		
+	/**
+	 * Add a user to a room
+	 * 
+	 * @param client
+	 * @param room
+	 */
+	private static boolean joinRoom(RemoteClient client, String room) {
+		log(client, "Join " + room);
+
+		if (client.getNick().compareTo("") == 0)
+			return false;
+		
+		String oldRoom = client.getRoom();
+		if (oldRoom != null && room.compareTo(oldRoom) == 0)
+			return false;
+
+		try {
+			rooms.joinRoom(client, room);
+		} catch (IOException e) {
+			System.out.println(e.toString());
+		}
+	
 		return true;
-	}
+	}	
 
 	/**
-	 * Remove a user from the room they are currently in.
+	 * Remove a user from a room
 	 * 
-	 * @param sc user's socket
+	 * @param client
+	 * @param room
 	 */
-	private static boolean leaveRoom(SocketChannel sc) {
+	private static boolean leaveRoom(RemoteClient client) {
+		log(client, "Left " + client.getRoom());
+		try {
+			if (client.getRoom() != null){
+				rooms.leaveRoom(client);
+				return true;
+			}
+		} catch (IOException e) {
+			System.out.println(e.toString());
+		}
 
-		return true;
+		return false;
 	}
 
 	/**
@@ -151,11 +190,13 @@ public class ChatServer {
 	 * 
 	 * @param sc user's socket
 	 */
-	private static boolean disconnect(SocketChannel sc) {
-
+	private static boolean disconnect(RemoteClient client) {
+		leaveRoom(client);
+		SocketChannel sc = (SocketChannel) client.getKey().channel();
+		close(sc);
 		return true;
 	}
-
+		
 	/**
 	 * Broadcast a message to all connected clients
 	 * 
@@ -166,18 +207,19 @@ public class ChatServer {
 		for (SelectionKey key : selector.keys()) {
 			if (key.isValid() && key.channel() instanceof SocketChannel) {
 				Integer username = (Integer) key.attachment();
-				message = String.format("%s: %s\n", username, message);
-				ByteBuffer msgBuffer = ByteBuffer.wrap(message.getBytes());
+				//String msg = message.addUsername();
+				//message = String.format("%s: %s\n", username, message);
+				//ByteBuffer msgBuffer = ByteBuffer.wrap(message.getBytes());
 				SocketChannel sc = (SocketChannel) key.channel();
 				// sc.write(msgBuffer);
 				// while(msgBuffer.hasRemaining()) {
-				sc.write(msgBuffer);
-				// }
+				//     sc.write(msgBuffer);
+				//}
 				// msgBuffer.rewind();
 			}
 		}
 	}
-
+		
 	/**
 	 * Creates a server-socket channel to listen on a given port and registers it
 	 * with a selector.
@@ -188,20 +230,20 @@ public class ChatServer {
 	private static void setup(int port) throws IOException {		
 		// Create a ServerSocketChannel
 		ssc = ServerSocketChannel.open();
-
+		
 		// Set it to non-blocking
 		ssc.configureBlocking(false);
-
+		
 		// Get the Socket connected to this channel, and bind it to the
 		// listening port
 		// ss = ssc.socket();
 		InetSocketAddress isa = new InetSocketAddress(port);
 		// ss.bind(isa);
 		ssc.bind(isa);
-
+		
 		// Create a new Selector for selecting
 		selector = Selector.open();
-
+		
 		// Register the ServerSocketChannel, so we can listen for incoming
 		// connections
 		ssc.register(selector, SelectionKey.OP_ACCEPT);
@@ -227,17 +269,17 @@ public class ChatServer {
 		SocketChannel sc = ssc.accept();
 		sc.configureBlocking(false);
 		System.out.println("Got connection from " + sc);
-		
-		// Create a new RemoteClient
-		RemoteClient client = new RemoteClient();
-		clients.add(client);
-		
+
 		// Register it with the selector, for reading,
 		SelectionKey readKey = sc.register(selector, SelectionKey.OP_READ);
-		
+
+		// Create a new RemoteClient
+		RemoteClient client = new RemoteClient(readKey);
+		clients.add(client);
+
 		// Attach this clients Id to his key
 		readKey.attach(client.getId());
-		
+
 		System.out.println("Client " + client.getId() + " has connected");
 	}
 
@@ -258,14 +300,14 @@ public class ChatServer {
 			if (!ok) {
 				key.cancel();
 				close(sc);
-			} 
+			}
 		} catch (IOException ie) {
 			// On exception, remove this channel from the selector
 			key.cancel();
 			close(sc);
 		}
 	}
-
+	
 	/**
 	 * Closes a given socket.
 	 * 
@@ -296,8 +338,8 @@ public class ChatServer {
 	}
 
 	public static void main(String args[]) throws Exception {
-		// int port = Integer.parseInt(args[0]);
-		int port = 6699;
+		int port = Integer.parseInt(args[0]);
+
 		try {
 			setup(port);
 
@@ -317,7 +359,7 @@ public class ChatServer {
 				Set<SelectionKey> keys = selector.selectedKeys();
 				for (SelectionKey key : keys) {
 					if (key.isAcceptable()) {
-						acceptConnection(key); 
+						acceptConnection(key);
 					} else if (key.isReadable()) {
 						readSocket(key);
 					}
@@ -327,8 +369,13 @@ public class ChatServer {
 				keys.clear();
 			}
 		} catch (IOException ie) {
+
 			System.err.println(ie);
 		}
+	}
+
+	private static void log(RemoteClient client, String message) {
+		System.out.println("Client " + client.getId() + ": " + message);
 	}
 
 }

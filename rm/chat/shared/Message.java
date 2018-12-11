@@ -42,17 +42,26 @@ public class Message {
 	
 	private MessageType type;
 	private String message;
-	
+	private String username;
+
 	public Message(MessageType type) {
 		this.type = type;
+		this.username = "";
 		this.message = "";
 	}
 	
 	public Message(MessageType type, String message) {
 		this.type = type;
+		this.username = "";
 		this.message = message;
 	}
 	
+	public Message(String username, String message) {
+		this.type = MessageType.MESSAGE;
+		this.username = "";
+		this.message = message;
+	}
+
 	public MessageType getType() {
 		return type;
 	}
@@ -62,7 +71,11 @@ public class Message {
 	}
 
 	public String getMessage() {
-		return message;
+		return this.message;
+	}
+
+	public String getUser() {
+		return this.username;
 	}
 
 	void setMessage(String message) {
@@ -73,29 +86,52 @@ public class Message {
 		return new Message(MessageType.ERROR);
 	}
 
+	public static Message okMessage() {
+		return new Message(MessageType.OK);
+	}
+
+	public static Message joinMessage(String name) {
+		return new Message(MessageType.JOINED, name);
+	}
+
+	public static Message leaveMessage(String name) {
+		return new Message(MessageType.LEFT, name);
+	}
+
 	public boolean isError() {
 		return this.type == MessageType.ERROR;
 	}
 
-	/**
+	/**isCommand
 	 * Test if a message is a command
 	 * @param message
 	 * @return
 	 */
-	public static boolean isCommand(String message) {
-		return (message.charAt(0) == '/' && message.length() > 1 && message.charAt(1) != '/');
+	public boolean isCommand() {
+		return (this.message.charAt(0) == '/' 
+			&& this.message.length() > 1 
+			&& this.message.charAt(1) != '/');
 	}
-	
+
 	/**
 	 * Clean up a message by removing escape characters
 	 * @param message
 	 * @return
 	 */
-	public static String cleanMessage(String message) {
-		if (message.charAt(0) == '/' && message.length() > 1 && message.charAt(1) == '/')
+	public String clean() {
+		if (this.message.charAt(0) == '/' && this.message.length() > 1 && this.message.charAt(1) == '/') {
 			message = message.substring(1);
+		}
 		message.trim();
 		return message;
+	}
+
+	public void log() {
+		System.out.println(this.username + ": " + this.message);
+	}
+
+	public String[] getArgs() {
+		return this.message.split(" ");
 	}
 
 }

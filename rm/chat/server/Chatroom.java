@@ -2,8 +2,13 @@ package rm.chat.server;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.nio.channels.SocketChannel;
+import java.nio.channels.SelectionKey;
+import java.io.IOException;
+import java.nio.ByteBuffer;
 
-import rm.chat.server.RemoteClient;
+import rm.chat.shared.Message;
+import rm.chat.shared.Message.MessageType;
 
 /**
  * A room where users can see and chat with each other. Keeps a record of all the
@@ -36,6 +41,14 @@ public class Chatroom {
         this.name = name;
         this.users = new ArrayList<RemoteClient>();
     }
+    
+    public int getId() {
+        return this.id;
+    }
+
+    public String getName() {
+        return this.name;
+    }
 
     /**
      * Increment and return global ID.
@@ -51,8 +64,13 @@ public class Chatroom {
      * 
      * @param user
      */
-    public void addUser(RemoteClient user) {
-    	users.add(user);
+    public void addUser(RemoteClient user) throws IOException{
+        this.broadcast(new Message(
+            MessageType.JOINED,
+            user.getNick()
+        ));
+        user.joinRoom(this.name);
+        users.add(user);
     }
 
     /**
@@ -60,8 +78,25 @@ public class Chatroom {
      * 
      * @param user
      */
-    public void removeUser(RemoteClient user) {
-    	users.remove(user);
+    public void removeUser(RemoteClient user) throws IOException {
+        user.leaveRoom();
+        users.remove(user);
+        this.broadcast(new Message(
+            MessageType.LEFT,
+            user.getNick()
+        ));
     }
 
+    /**
+     * Send a message to all the users in the room
+     * 
+     * @return True if all users got the message
+     */
+    public boolean broadcast(Message message) throws IOException{
+        boolean result = true;
+        for(RemoteClient client : users) {
+            result = result && client.sendMessage(message);
+        }
+        return result;    
+    }
 }
